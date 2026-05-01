@@ -3,7 +3,7 @@ Telegram Log Bot - Admin Log'daki HER ŞEYİ log grubuna atar
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.types import (
@@ -102,10 +102,21 @@ def get_user_info(user) -> str:
 
 
 def format_date(dt) -> str:
-    """Tarihi formatla"""
+    """Tarihi TR saatine çevir ve formatla"""
     if not dt:
         return "Bilinmiyor"
-    return dt.strftime("%d.%m.%Y %H:%M:%S")
+
+    # TR saat dilimi (UTC+3)
+    tr_timezone = timezone(timedelta(hours=3))
+
+    # Eğer datetime timezone-aware değilse UTC olarak kabul et
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    # TR saatine çevir
+    tr_time = dt.astimezone(tr_timezone)
+
+    return tr_time.strftime("%d.%m.%Y • %H:%M:%S")
 
 
 def get_media_info(media) -> str:
@@ -236,18 +247,22 @@ async def process_admin_log_event(event, users_dict):
         text = msg.message if msg.message else ""
         media_info = get_media_info(msg.media) if msg.media else ""
 
-        log_text = f"""🗑️ **MESAJ SİLİNDİ**
-{separator}
+        # Mesajı gönderen kişiyi bul
+        msg_sender = users_dict.get(msg.from_id.user_id) if msg.from_id and hasattr(msg.from_id, 'user_id') else None
+        msg_sender_info = get_user_info(msg_sender) if msg_sender else "Bilinmiyor"
+        msg_date = format_date(msg.date) if msg.date else "Bilinmiyor"
 
-👤 **Silen:** {user_info}
+        log_text = f"""#Mesaj_Silindi
 
-📝 **Silinen Mesaj:**
-{text if text else "(Metin yok)"}
+🗑 **Mesaj Silme İşlemi**
 
-{media_info if media_info else ""}
-
-📅 **Tarih:** `{date}`
-🆔 **Mesaj ID:** `{msg.id}`"""
+◈ **Silen Yetkili:** {user_info}
+◈ **Mesaj Sahibi:** {msg_sender_info}
+◈ **Mesaj İçeriği:** {text if text else "(Metin yok)"}
+{f"◈ **Medya:** {media_info}" if media_info else ""}
+◈ **Mesaj Tarihi:** `{msg_date}`
+◈ **Silinme Tarihi:** `{date}`
+◈ **Mesaj ID:** `{msg.id}`"""
 
         # Medya varsa indir ve gönder
         if msg.media:
@@ -267,19 +282,19 @@ async def process_admin_log_event(event, users_dict):
         old_text = old_msg.message if old_msg.message else "(Metin yok)"
         new_text = new_msg.message if new_msg.message else "(Metin yok)"
 
-        log_text = f"""✏️ **MESAJ DÜZENLENDİ**
-{separator}
+        # Mesajı düzenleyen kişi bilgisi
+        msg_sender = users_dict.get(new_msg.from_id.user_id) if new_msg.from_id and hasattr(new_msg.from_id, 'user_id') else None
+        msg_sender_info = get_user_info(msg_sender) if msg_sender else user_info
 
-👤 **Düzenleyen:** {user_info}
+        log_text = f"""#Mesaj_Düzenlendi
 
-📝 **Eski Mesaj:**
-{old_text}
+✏ **Mesaj Düzenleme İşlemi**
 
-📝 **Yeni Mesaj:**
-{new_text}
-
-📅 **Tarih:** `{date}`
-🆔 **Mesaj ID:** `{new_msg.id}`"""
+◈ **Düzenleyen:** {msg_sender_info}
+◈ **Eski İçerik:** {old_text}
+◈ **Yeni İçerik:** {new_text}
+◈ **Düzenlenme Tarihi:** `{date}`
+◈ **Mesaj ID:** `{new_msg.id}`"""
 
         await send_log(log_text)
 
@@ -287,44 +302,50 @@ async def process_admin_log_event(event, users_dict):
     elif isinstance(action, ChannelAdminLogEventActionUpdatePinned):
         msg = action.message
         text = msg.message if msg and msg.message else ""
-        pinned = "SABİTLENDİ" if msg and msg.id else "SABİT KALDIRILDI"
-        emoji = "📌" if msg and msg.id else "📍"
+        is_pinned = msg and msg.id
+        tag = "#Mesaj_Sabitlendi" if is_pinned else "#Sabit_Kaldırıldı"
+        emoji = "📌" if is_pinned else "📍"
+        action_text = "Sabitleme" if is_pinned else "Sabit Kaldırma"
 
-        log_text = f"""{emoji} **MESAJ {pinned}**
-{separator}
+        # Mesaj sahibi
+        msg_sender = users_dict.get(msg.from_id.user_id) if msg and msg.from_id and hasattr(msg.from_id, 'user_id') else None
+        msg_sender_info = get_user_info(msg_sender) if msg_sender else "Bilinmiyor"
+        media_info = get_media_info(msg.media) if msg and msg.media else ""
 
-👤 **İşlemi Yapan:** {user_info}
+        log_text = f"""{tag}
 
-📝 **Mesaj:**
-{text if text else "(Metin yok)"}
+{emoji} **Mesaj {action_text} İşlemi**
 
-📅 **Tarih:** `{date}`"""
-
-        if msg and msg.media:
-            media_info = get_media_info(msg.media)
-            log_text += f"\n{media_info}"
+◈ **İşlemi Yapan:** {user_info}
+◈ **Mesaj Sahibi:** {msg_sender_info}
+◈ **Mesaj İçeriği:** {text if text else "(Metin yok)"}
+{f"◈ **Medya:** {media_info}" if media_info else ""}
+◈ **İşlem Tarihi:** `{date}`
+{f"◈ **Mesaj ID:** `{msg.id}`" if msg else ""}"""
 
         await send_log(log_text)
 
     # ==================== ÜYE KATILDI ====================
     elif isinstance(action, ChannelAdminLogEventActionParticipantJoin):
-        log_text = f"""📥 **ÜYE KATILDI**
-{separator}
+        log_text = f"""#Gruba_Katıldı
 
-👤 **Katılan:** {user_info}
+📥 **Gruba Katılma**
 
-📅 **Tarih:** `{date}`"""
+◈ **Katılan Üye:** {user_info}
+◈ **Katılma Şekli:** Direkt Katılım
+◈ **Katılma Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== ÜYE AYRILDI ====================
     elif isinstance(action, ChannelAdminLogEventActionParticipantLeave):
-        log_text = f"""📤 **ÜYE AYRILDI**
-{separator}
+        log_text = f"""#Gruptan_Ayrıldı
 
-👤 **Ayrılan:** {user_info}
+📤 **Gruptan Ayrılma**
 
-📅 **Tarih:** `{date}`"""
+◈ **Ayrılan Üye:** {user_info}
+◈ **Ayrılma Şekli:** Kendi İsteğiyle
+◈ **Ayrılma Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -333,13 +354,13 @@ async def process_admin_log_event(event, users_dict):
         invited_user = users_dict.get(action.participant.user_id)
         invited_info = get_user_info(invited_user)
 
-        log_text = f"""📨 **ÜYE DAVET EDİLDİ**
-{separator}
+        log_text = f"""#Üye_Davet_Edildi
 
-👤 **Davet Eden:** {user_info}
-👤 **Davet Edilen:** {invited_info}
+📨 **Üye Davet İşlemi**
 
-📅 **Tarih:** `{date}`"""
+◈ **Davet Eden:** {user_info}
+◈ **Davet Edilen:** {invited_info}
+◈ **Davet Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -347,25 +368,29 @@ async def process_admin_log_event(event, users_dict):
     elif isinstance(action, ChannelAdminLogEventActionParticipantJoinByInvite):
         invite = action.invite
         link = invite.link if hasattr(invite, 'link') else "Bilinmiyor"
+        invite_admin = users_dict.get(invite.admin_id) if hasattr(invite, 'admin_id') and invite.admin_id else None
+        invite_admin_info = get_user_info(invite_admin) if invite_admin else "Bilinmiyor"
 
-        log_text = f"""🔗 **LİNK İLE KATILDI**
-{separator}
+        log_text = f"""#Link_İle_Katıldı
 
-👤 **Katılan:** {user_info}
-🔗 **Link:** `{link}`
+🔗 **Davet Linki ile Katılma**
 
-📅 **Tarih:** `{date}`"""
+◈ **Katılan Üye:** {user_info}
+◈ **Kullanılan Link:** `{link}`
+◈ **Linki Oluşturan:** {invite_admin_info}
+◈ **Katılma Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== İSTEK İLE KATILDI ====================
     elif isinstance(action, ChannelAdminLogEventActionParticipantJoinByRequest):
-        log_text = f"""✋ **İSTEK İLE KATILDI**
-{separator}
+        log_text = f"""#İstek_İle_Katıldı
 
-👤 **Katılan:** {user_info}
+✋ **Katılım İsteği Onaylandı**
 
-📅 **Tarih:** `{date}`"""
+◈ **Katılan Üye:** {user_info}
+◈ **Katılma Şekli:** İstek Onayı
+◈ **Onaylanma Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -380,33 +405,38 @@ async def process_admin_log_event(event, users_dict):
         # Ban mı, unban mı, kısıtlama mı?
         if new_rights and new_rights.view_messages:
             emoji = "🚫"
-            action_text = "YASAKLANDI (BAN)"
+            action_text = "Yasaklama (Ban)"
+            tag = "#Üye_Yasaklandı"
         elif old_rights and old_rights.view_messages and (not new_rights or not new_rights.view_messages):
             emoji = "✅"
-            action_text = "YASAK KALDIRILDI (UNBAN)"
+            action_text = "Yasak Kaldırma (Unban)"
+            tag = "#Yasak_Kaldırıldı"
         elif new_rights:
             emoji = "🔒"
-            action_text = "KISITLANDI"
+            action_text = "Kısıtlama"
+            tag = "#Üye_Kısıtlandı"
         else:
             emoji = "🔓"
-            action_text = "KISITLAMA KALDIRILDI"
+            action_text = "Kısıtlama Kaldırma"
+            tag = "#Kısıtlama_Kaldırıldı"
 
         new_restrictions = format_banned_rights(new_rights) if new_rights else "Yok"
+        old_restrictions = format_banned_rights(old_rights) if old_rights else "Yok"
 
         # Süre
-        until = ""
+        until_text = ""
         if new_rights and new_rights.until_date:
-            until = f"\n⏰ **Süre:** `{format_date(new_rights.until_date)}`'e kadar"
+            until_text = f"\n◈ **Bitiş Tarihi:** `{format_date(new_rights.until_date)}`"
 
-        log_text = f"""{emoji} **{action_text}**
-{separator}
+        log_text = f"""{tag}
 
-👤 **İşlemi Yapan:** {user_info}
-👤 **Hedef:** {target_info}
+{emoji} **{action_text} İşlemi**
 
-🔒 **Kısıtlamalar:** {new_restrictions}{until}
-
-📅 **Tarih:** `{date}`"""
+◈ **İşlemi Yapan Yetkili:** {user_info}
+◈ **Hedef Üye:** {target_info}
+◈ **Önceki Kısıtlamalar:** {old_restrictions}
+◈ **Yeni Kısıtlamalar:** {new_restrictions}{until_text}
+◈ **İşlem Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -421,87 +451,87 @@ async def process_admin_log_event(event, users_dict):
 
         if new_rights and not old_rights:
             emoji = "👑"
-            action_text = "ADMİN YAPILDI"
+            action_text = "Admin Yapma"
+            tag = "#Admin_Yapıldı"
         elif old_rights and not new_rights:
             emoji = "👤"
-            action_text = "ADMİNLİK ALINDI"
+            action_text = "Adminlik Alma"
+            tag = "#Adminlik_Alındı"
         else:
             emoji = "⚙️"
-            action_text = "ADMİN YETKİLERİ DEĞİŞTİ"
+            action_text = "Admin Yetki Değişikliği"
+            tag = "#Admin_Yetkileri_Değişti"
 
         new_perms = format_admin_rights(new_rights) if new_rights else "Yok"
         old_perms = format_admin_rights(old_rights) if old_rights else "Yok"
 
-        rank = ""
+        rank_text = ""
         if hasattr(action.new_participant, 'rank') and action.new_participant.rank:
-            rank = f"\n🏷️ **Ünvan:** `{action.new_participant.rank}`"
+            rank_text = f"\n◈ **Ünvan:** `{action.new_participant.rank}`"
 
-        log_text = f"""{emoji} **{action_text}**
-{separator}
+        log_text = f"""{tag}
 
-👤 **İşlemi Yapan:** {user_info}
-👤 **Hedef:** {target_info}
+{emoji} **{action_text} İşlemi**
 
-📋 **Eski Yetkiler:** {old_perms}
-📋 **Yeni Yetkiler:** {new_perms}{rank}
-
-📅 **Tarih:** `{date}`"""
+◈ **İşlemi Yapan:** {user_info}
+◈ **Hedef Üye:** {target_info}
+◈ **Önceki Yetkiler:** {old_perms}
+◈ **Yeni Yetkiler:** {new_perms}{rank_text}
+◈ **İşlem Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== GRUP ADI DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangeTitle):
-        log_text = f"""📝 **GRUP ADI DEĞİŞTİ**
-{separator}
+        log_text = f"""#Grup_Adı_Değişti
 
-👤 **Değiştiren:** {user_info}
+📝 **Grup Adı Değişikliği**
 
-📌 **Eski Ad:** `{action.prev_value}`
-📌 **Yeni Ad:** `{action.new_value}`
-
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Eski Ad:** `{action.prev_value}`
+◈ **Yeni Ad:** `{action.new_value}`
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== GRUP AÇIKLAMASI DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangeAbout):
-        log_text = f"""📄 **GRUP AÇIKLAMASI DEĞİŞTİ**
-{separator}
+        log_text = f"""#Grup_Açıklaması_Değişti
 
-👤 **Değiştiren:** {user_info}
+📄 **Grup Açıklaması Değişikliği**
 
-📝 **Eski Açıklama:**
-{action.prev_value if action.prev_value else "(Boş)"}
-
-📝 **Yeni Açıklama:**
-{action.new_value if action.new_value else "(Boş)"}
-
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Eski Açıklama:** {action.prev_value if action.prev_value else "(Boş)"}
+◈ **Yeni Açıklama:** {action.new_value if action.new_value else "(Boş)"}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== KULLANICI ADI DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangeUsername):
-        log_text = f"""🔗 **KULLANICI ADI DEĞİŞTİ**
-{separator}
+        log_text = f"""#Grup_Username_Değişti
 
-👤 **Değiştiren:** {user_info}
+🔗 **Grup Kullanıcı Adı Değişikliği**
 
-📌 **Eski:** @{action.prev_value if action.prev_value else "(Yok)"}
-📌 **Yeni:** @{action.new_value if action.new_value else "(Yok)"}
-
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Eski Username:** @{action.prev_value if action.prev_value else "(Yok)"}
+◈ **Yeni Username:** @{action.new_value if action.new_value else "(Yok)"}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== GRUP FOTOĞRAFI DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangePhoto):
-        log_text = f"""🖼️ **GRUP FOTOĞRAFI DEĞİŞTİ**
-{separator}
+        photo_action = "Güncellendi" if action.new_photo else "Kaldırıldı"
+        tag = "#Grup_Fotoğrafı_Değişti" if action.new_photo else "#Grup_Fotoğrafı_Kaldırıldı"
 
-👤 **Değiştiren:** {user_info}
+        log_text = f"""{tag}
 
-📅 **Tarih:** `{date}`"""
+🖼 **Grup Fotoğrafı Değişikliği**
+
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **İşlem:** Fotoğraf {photo_action}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         # Yeni fotoğrafı gönder
         if action.new_photo:
@@ -511,61 +541,65 @@ async def process_admin_log_event(event, users_dict):
             except:
                 await send_log(log_text)
         else:
-            await send_log(log_text + "\n\n(Fotoğraf kaldırıldı)")
+            await send_log(log_text)
 
     # ==================== DAVET LİNKİ AYARI ====================
     elif isinstance(action, ChannelAdminLogEventActionToggleInvites):
-        status = "AKTİF" if action.new_value else "KAPALI"
+        status = "Aktif" if action.new_value else "Kapalı"
         emoji = "🔓" if action.new_value else "🔒"
 
-        log_text = f"""{emoji} **DAVET LİNKİ: {status}**
-{separator}
+        log_text = f"""#Davet_Linki_Ayarı
 
-👤 **Değiştiren:** {user_info}
+{emoji} **Davet Linki Ayar Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Yeni Durum:** {status}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== İMZALAR AYARI ====================
     elif isinstance(action, ChannelAdminLogEventActionToggleSignatures):
-        status = "AKTİF" if action.new_value else "KAPALI"
+        status = "Aktif" if action.new_value else "Kapalı"
 
-        log_text = f"""✍️ **İMZALAR: {status}**
-{separator}
+        log_text = f"""#İmza_Ayarı
 
-👤 **Değiştiren:** {user_info}
+✍ **İmza Ayar Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Yeni Durum:** {status}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== YAVAS MOD ====================
     elif isinstance(action, ChannelAdminLogEventActionToggleSlowMode):
         if action.new_value == 0:
-            status = "KAPALI"
+            status = "Kapalı"
         else:
             status = f"{action.new_value} saniye"
 
-        log_text = f"""🐢 **YAVAŞ MOD: {status}**
-{separator}
+        log_text = f"""#Yavaş_Mod
 
-👤 **Değiştiren:** {user_info}
+🐢 **Yavaş Mod Ayar Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Yeni Süre:** {status}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== GEÇMİŞ GİZLİLİĞİ ====================
     elif isinstance(action, ChannelAdminLogEventActionTogglePreHistoryHidden):
-        status = "GİZLİ" if action.new_value else "GÖRÜNÜR"
+        status = "Gizli" if action.new_value else "Görünür"
 
-        log_text = f"""📜 **MESAJ GEÇMİŞİ: {status}**
-{separator}
+        log_text = f"""#Mesaj_Geçmişi_Ayarı
 
-👤 **Değiştiren:** {user_info}
+📜 **Mesaj Geçmişi Ayar Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Yeni Üyeler İçin Geçmiş:** {status}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -574,26 +608,25 @@ async def process_admin_log_event(event, users_dict):
         new_rights = format_banned_rights(action.new_banned_rights)
         old_rights = format_banned_rights(action.prev_banned_rights)
 
-        log_text = f"""🔒 **VARSAYILAN KISITLAMALAR DEĞİŞTİ**
-{separator}
+        log_text = f"""#Varsayılan_Kısıtlamalar
 
-👤 **Değiştiren:** {user_info}
+🔒 **Varsayılan Kısıtlama Değişikliği**
 
-📋 **Eski:** {old_rights}
-📋 **Yeni:** {new_rights}
-
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Önceki Kısıtlamalar:** {old_rights}
+◈ **Yeni Kısıtlamalar:** {new_rights}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== STİCKER SETİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangeStickerSet):
-        log_text = f"""🎭 **STİCKER SETİ DEĞİŞTİ**
-{separator}
+        log_text = f"""#Sticker_Seti_Değişti
 
-👤 **Değiştiren:** {user_info}
+🎭 **Sticker Seti Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -601,60 +634,59 @@ async def process_admin_log_event(event, users_dict):
     elif isinstance(action, ChannelAdminLogEventActionStopPoll):
         msg = action.message
 
-        log_text = f"""📊 **ANKET DURDURULDU**
-{separator}
+        log_text = f"""#Anket_Durduruldu
 
-👤 **Durduran:** {user_info}
+📊 **Anket Durdurma İşlemi**
 
-📅 **Tarih:** `{date}`
-🆔 **Mesaj ID:** `{msg.id}`"""
+◈ **Durduran Yetkili:** {user_info}
+◈ **Durdurma Tarihi:** `{date}`
+◈ **Mesaj ID:** `{msg.id}`"""
 
         await send_log(log_text)
 
     # ==================== BAĞLI SOHBET DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangeLinkedChat):
-        log_text = f"""🔗 **BAĞLI SOHBET DEĞİŞTİ**
-{separator}
+        log_text = f"""#Bağlı_Sohbet_Değişti
 
-👤 **Değiştiren:** {user_info}
+🔗 **Bağlı Sohbet Değişikliği**
 
-📌 **Eski ID:** `{action.prev_value}`
-📌 **Yeni ID:** `{action.new_value}`
-
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Önceki Sohbet ID:** `{action.prev_value}`
+◈ **Yeni Sohbet ID:** `{action.new_value}`
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== KONUM DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangeLocation):
-        log_text = f"""📍 **KONUM DEĞİŞTİ**
-{separator}
+        log_text = f"""#Konum_Değişti
 
-👤 **Değiştiren:** {user_info}
+📍 **Grup Konum Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== GÖRÜNTÜLÜ GÖRÜŞME BAŞLADI ====================
     elif isinstance(action, ChannelAdminLogEventActionStartGroupCall):
-        log_text = f"""📞 **GÖRÜŞME BAŞLADI**
-{separator}
+        log_text = f"""#Görüşme_Başladı
 
-👤 **Başlatan:** {user_info}
+📞 **Sesli/Görüntülü Görüşme Başlatıldı**
 
-📅 **Tarih:** `{date}`"""
+◈ **Başlatan:** {user_info}
+◈ **Başlangıç Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== GÖRÜNTÜLÜ GÖRÜŞME BİTTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionDiscardGroupCall):
-        log_text = f"""📴 **GÖRÜŞME BİTTİ**
-{separator}
+        log_text = f"""#Görüşme_Bitti
 
-👤 **Bitiren:** {user_info}
+📴 **Sesli/Görüntülü Görüşme Sonlandırıldı**
 
-📅 **Tarih:** `{date}`"""
+◈ **Bitiren:** {user_info}
+◈ **Bitiş Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -665,13 +697,13 @@ async def process_admin_log_event(event, users_dict):
         target_user = users_dict.get(target_id) if target_id else None
         target_info = get_user_info(target_user) if target_user else "Bilinmiyor"
 
-        log_text = f"""🔇 **SESİ KAPATILDI**
-{separator}
+        log_text = f"""#Görüşme_Ses_Kapatıldı
 
-👤 **İşlemi Yapan:** {user_info}
-👤 **Hedef:** {target_info}
+🔇 **Görüşmede Ses Kapatma**
 
-📅 **Tarih:** `{date}`"""
+◈ **İşlemi Yapan:** {user_info}
+◈ **Sesi Kapatılan:** {target_info}
+◈ **İşlem Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -682,26 +714,27 @@ async def process_admin_log_event(event, users_dict):
         target_user = users_dict.get(target_id) if target_id else None
         target_info = get_user_info(target_user) if target_user else "Bilinmiyor"
 
-        log_text = f"""🔊 **SESİ AÇILDI**
-{separator}
+        log_text = f"""#Görüşme_Ses_Açıldı
 
-👤 **İşlemi Yapan:** {user_info}
-👤 **Hedef:** {target_info}
+🔊 **Görüşmede Ses Açma**
 
-📅 **Tarih:** `{date}`"""
+◈ **İşlemi Yapan:** {user_info}
+◈ **Sesi Açılan:** {target_info}
+◈ **İşlem Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== GÖRÜŞME AYARLARI DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionToggleGroupCallSetting):
-        status = "AKTİF" if action.join_muted else "KAPALI"
+        status = "Aktif" if action.join_muted else "Kapalı"
 
-        log_text = f"""⚙️ **GÖRÜŞME: KATILIMDA SESİ KAPAT: {status}**
-{separator}
+        log_text = f"""#Görüşme_Ayarı
 
-👤 **Değiştiren:** {user_info}
+⚙ **Görüşme Ayar Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Katılımda Sesi Kapat:** {status}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -710,13 +743,13 @@ async def process_admin_log_event(event, users_dict):
         invite = action.invite
         link = invite.link if hasattr(invite, 'link') else "Bilinmiyor"
 
-        log_text = f"""🗑️ **DAVET LİNKİ SİLİNDİ**
-{separator}
+        log_text = f"""#Davet_Linki_Silindi
 
-👤 **Silen:** {user_info}
-🔗 **Link:** `{link}`
+🗑 **Davet Linki Silme**
 
-📅 **Tarih:** `{date}`"""
+◈ **Silen Yetkili:** {user_info}
+◈ **Silinen Link:** `{link}`
+◈ **Silinme Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -725,24 +758,24 @@ async def process_admin_log_event(event, users_dict):
         invite = action.invite
         link = invite.link if hasattr(invite, 'link') else "Bilinmiyor"
 
-        log_text = f"""🚫 **DAVET LİNKİ İPTAL EDİLDİ**
-{separator}
+        log_text = f"""#Davet_Linki_İptal
 
-👤 **İptal Eden:** {user_info}
-🔗 **Link:** `{link}`
+🚫 **Davet Linki İptal Etme**
 
-📅 **Tarih:** `{date}`"""
+◈ **İptal Eden Yetkili:** {user_info}
+◈ **İptal Edilen Link:** `{link}`
+◈ **İptal Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== DAVET LİNKİ DÜZENLENDİ ====================
     elif isinstance(action, ChannelAdminLogEventActionExportedInviteEdit):
-        log_text = f"""✏️ **DAVET LİNKİ DÜZENLENDİ**
-{separator}
+        log_text = f"""#Davet_Linki_Düzenlendi
 
-👤 **Düzenleyen:** {user_info}
+✏ **Davet Linki Düzenleme**
 
-📅 **Tarih:** `{date}`"""
+◈ **Düzenleyen Yetkili:** {user_info}
+◈ **Düzenleme Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -751,12 +784,13 @@ async def process_admin_log_event(event, users_dict):
         target = action.participant
         volume = target.volume if hasattr(target, 'volume') else 100
 
-        log_text = f"""🔉 **SES SEVİYESİ DEĞİŞTİ: %{volume // 100}**
-{separator}
+        log_text = f"""#Ses_Seviyesi_Değişti
 
-👤 **Değiştiren:** {user_info}
+🔉 **Görüşmede Ses Seviyesi Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren:** {user_info}
+◈ **Yeni Ses Seviyesi:** %{volume // 100}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -777,29 +811,30 @@ async def process_admin_log_event(event, users_dict):
             else:
                 return f"{seconds // 86400} gün"
 
-        log_text = f"""⏱️ **OTOMATİK SİLME SÜRESİ DEĞİŞTİ**
-{separator}
+        log_text = f"""#Otomatik_Silme_Süresi
 
-👤 **Değiştiren:** {user_info}
+⏱ **Otomatik Silme Süresi Değişikliği**
 
-📌 **Eski:** {format_ttl(old_ttl)}
-📌 **Yeni:** {format_ttl(new_ttl)}
-
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Önceki Süre:** {format_ttl(old_ttl)}
+◈ **Yeni Süre:** {format_ttl(new_ttl)}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== İLETME YASAĞI ====================
     elif isinstance(action, ChannelAdminLogEventActionToggleNoForwards):
-        status = "AKTİF" if action.new_value else "KAPALI"
+        status = "Aktif" if action.new_value else "Kapalı"
         emoji = "🚫" if action.new_value else "✅"
+        tag = "#İletme_Yasağı_Açıldı" if action.new_value else "#İletme_Yasağı_Kapandı"
 
-        log_text = f"""{emoji} **İLETME YASAĞI: {status}**
-{separator}
+        log_text = f"""{tag}
 
-👤 **Değiştiren:** {user_info}
+{emoji} **İletme Yasağı Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Yeni Durum:** {status}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -809,18 +844,15 @@ async def process_admin_log_event(event, users_dict):
         text = msg.message if msg.message else ""
         media_info = get_media_info(msg.media) if msg.media else ""
 
-        log_text = f"""📤 **MESAJ GÖNDERİLDİ**
-{separator}
+        log_text = f"""#Mesaj_Gönderildi
 
-👤 **Gönderen:** {user_info}
+📤 **Mesaj Gönderme İşlemi**
 
-📝 **Mesaj:**
-{text if text else "(Metin yok)"}
-
-{media_info if media_info else ""}
-
-📅 **Tarih:** `{date}`
-🆔 **Mesaj ID:** `{msg.id}`"""
+◈ **Gönderen:** {user_info}
+◈ **Mesaj İçeriği:** {text if text else "(Metin yok)"}
+{f"◈ **Medya:** {media_info}" if media_info else ""}
+◈ **Gönderilme Tarihi:** `{date}`
+◈ **Mesaj ID:** `{msg.id}`"""
 
         if msg.media:
             try:
@@ -833,12 +865,12 @@ async def process_admin_log_event(event, users_dict):
 
     # ==================== TEPKİLER DEĞİŞTİ ====================
     elif isinstance(action, ChannelAdminLogEventActionChangeAvailableReactions):
-        log_text = f"""😀 **TEPKİLER DEĞİŞTİ**
-{separator}
+        log_text = f"""#Tepkiler_Değişti
 
-👤 **Değiştiren:** {user_info}
+😀 **Tepki Ayarları Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -847,28 +879,29 @@ async def process_admin_log_event(event, users_dict):
         old_usernames = ", ".join(action.prev_value) if action.prev_value else "Yok"
         new_usernames = ", ".join(action.new_value) if action.new_value else "Yok"
 
-        log_text = f"""🔗 **KULLANICI ADLARI DEĞİŞTİ**
-{separator}
+        log_text = f"""#Kullanıcı_Adları_Değişti
 
-👤 **Değiştiren:** {user_info}
+🔗 **Kullanıcı Adları Değişikliği**
 
-📌 **Eski:** {old_usernames}
-📌 **Yeni:** {new_usernames}
-
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Önceki Usernameler:** {old_usernames}
+◈ **Yeni Usernameler:** {new_usernames}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== FORUM MODU ====================
     elif isinstance(action, ChannelAdminLogEventActionToggleForum):
-        status = "AKTİF" if action.new_value else "KAPALI"
+        status = "Aktif" if action.new_value else "Kapalı"
+        tag = "#Forum_Modu_Açıldı" if action.new_value else "#Forum_Modu_Kapandı"
 
-        log_text = f"""💬 **FORUM MODU: {status}**
-{separator}
+        log_text = f"""{tag}
 
-👤 **Değiştiren:** {user_info}
+💬 **Forum Modu Değişikliği**
 
-📅 **Tarih:** `{date}`"""
+◈ **Değiştiren Yetkili:** {user_info}
+◈ **Yeni Durum:** {status}
+◈ **Değişiklik Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -877,13 +910,13 @@ async def process_admin_log_event(event, users_dict):
         topic = action.topic
         title = topic.title if hasattr(topic, 'title') else "Bilinmiyor"
 
-        log_text = f"""📁 **KONU OLUŞTURULDU**
-{separator}
+        log_text = f"""#Konu_Oluşturuldu
 
-👤 **Oluşturan:** {user_info}
-📌 **Konu:** {title}
+📁 **Yeni Konu Oluşturma**
 
-📅 **Tarih:** `{date}`"""
+◈ **Oluşturan:** {user_info}
+◈ **Konu Başlığı:** {title}
+◈ **Oluşturma Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
