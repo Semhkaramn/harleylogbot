@@ -239,8 +239,6 @@ async def process_admin_log_event(event, users_dict):
     date = format_date(event.date)
     action = event.action
 
-    separator = "━" * 35
-
     # ==================== MESAJ SİLME ====================
     if isinstance(action, ChannelAdminLogEventActionDeleteMessage):
         msg = action.message
@@ -925,13 +923,13 @@ async def process_admin_log_event(event, users_dict):
         new_topic = action.new_topic
         title = new_topic.title if hasattr(new_topic, 'title') else "Bilinmiyor"
 
-        log_text = f"""✏️ **KONU DÜZENLENDİ**
-{separator}
+        log_text = f"""#Konu_Düzenlendi
 
-👤 **Düzenleyen:** {user_info}
-📌 **Konu:** {title}
+✏️ **Konu Düzenleme**
 
-📅 **Tarih:** `{date}`"""
+◈ **Düzenleyen Yetkili:** {user_info}
+◈ **Konu Başlığı:** {title}
+◈ **Düzenleme Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -940,24 +938,24 @@ async def process_admin_log_event(event, users_dict):
         topic = action.topic
         title = topic.title if hasattr(topic, 'title') else "Bilinmiyor"
 
-        log_text = f"""🗑️ **KONU SİLİNDİ**
-{separator}
+        log_text = f"""#Konu_Silindi
 
-👤 **Silen:** {user_info}
-📌 **Konu:** {title}
+🗑️ **Konu Silme**
 
-📅 **Tarih:** `{date}`"""
+◈ **Silen Yetkili:** {user_info}
+◈ **Silinen Konu:** {title}
+◈ **Silme Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
     # ==================== KONU SABİTLENDİ ====================
     elif isinstance(action, ChannelAdminLogEventActionPinTopic):
-        log_text = f"""📌 **KONU SABİTLENDİ/SABİT KALDIRILDI**
-{separator}
+        log_text = f"""#Konu_Sabitleme
 
-👤 **İşlemi Yapan:** {user_info}
+📌 **Konu Sabitleme İşlemi**
 
-📅 **Tarih:** `{date}`"""
+◈ **İşlemi Yapan Yetkili:** {user_info}
+◈ **İşlem Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -965,12 +963,13 @@ async def process_admin_log_event(event, users_dict):
     else:
         action_name = type(action).__name__.replace("ChannelAdminLogEventAction", "")
 
-        log_text = f"""❓ **BİLİNMEYEN EYLEM: {action_name}**
-{separator}
+        log_text = f"""#Bilinmeyen_Eylem
 
-👤 **Yapan:** {user_info}
+❓ **Tanımlanmamış Eylem**
 
-📅 **Tarih:** `{date}`"""
+◈ **Eylem Türü:** {action_name}
+◈ **İşlemi Yapan:** {user_info}
+◈ **İşlem Tarihi:** `{date}`"""
 
         await send_log(log_text)
 
@@ -1041,20 +1040,15 @@ async def on_message_edited(event):
         except:
             user_info = f"`{msg.sender_id}`"
 
-        separator = "━" * 35
-        log_text = f"""✏️ **MESAJ DÜZENLENDİ (Gerçek Zamanlı)**
-{separator}
+        log_text = f"""#Mesaj_Düzenlendi_Gerçek_Zamanlı
 
-👤 **Düzenleyen:** {user_info}
+✏️ **Mesaj Düzenleme (Gerçek Zamanlı)**
 
-📝 **Eski Mesaj:**
-{old_text}
-
-📝 **Yeni Mesaj:**
-{msg.message if msg.message else "(Metin yok)"}
-
-📅 **Tarih:** `{format_date(msg.edit_date)}`
-🆔 **Mesaj ID:** `{msg.id}`"""
+◈ **Düzenleyen:** {user_info}
+◈ **Eski İçerik:** {old_text}
+◈ **Yeni İçerik:** {msg.message if msg.message else "(Metin yok)"}
+◈ **Düzenleme Tarihi:** `{format_date(msg.edit_date)}`
+◈ **Mesaj ID:** `{msg.id}`"""
         await send_log(log_text)
 
 
@@ -1064,7 +1058,6 @@ async def on_message_deleted(event):
     for msg_id in event.deleted_ids:
         cached = message_cache.get(msg_id)
         if cached:
-            separator = "━" * 35
             try:
                 sender = await client.get_entity(cached['sender_id'])
                 user_info = get_user_info(sender)
@@ -1074,18 +1067,15 @@ async def on_message_deleted(event):
             text = cached.get('text', '')
             media_info = get_media_info(cached.get('media')) if cached.get('media') else ""
 
-            log_text = f"""🗑️ **MESAJ SİLİNDİ (Gerçek Zamanlı)**
-{separator}
+            log_text = f"""#Mesaj_Silindi_Gerçek_Zamanlı
 
-👤 **Gönderen:** {user_info}
+🗑️ **Mesaj Silme (Gerçek Zamanlı)**
 
-📝 **Silinen Mesaj:**
-{text if text else "(Metin yok)"}
-
-{media_info if media_info else ""}
-
-📅 **Gönderilme:** `{format_date(cached.get('date'))}`
-🆔 **Mesaj ID:** `{msg_id}`"""
+◈ **Mesaj Sahibi:** {user_info}
+◈ **Silinen İçerik:** {text if text else "(Metin yok)"}
+{f"◈ **Medya:** {media_info}" if media_info else ""}
+◈ **Gönderilme Tarihi:** `{format_date(cached.get('date'))}`
+◈ **Mesaj ID:** `{msg_id}`"""
 
             if cached.get('media'):
                 try:
@@ -1101,7 +1091,6 @@ async def on_message_deleted(event):
 @client.on(events.ChatAction(chats=config.SOURCE_GROUP_ID))
 async def on_chat_action(event):
     """Üye giriş/çıkış olayları"""
-    separator = "━" * 35
 
     if event.user_joined or event.user_added:
         try:
@@ -1116,20 +1105,20 @@ async def on_chat_action(event):
                 added_by_info = get_user_info(added_by)
             except:
                 added_by_info = "Bilinmiyor"
-            log_text = f"""📨 **ÜYE EKLENDİ**
-{separator}
+            log_text = f"""#Üye_Eklendi
 
-👤 **Eklenen:** {user_info}
-👤 **Ekleyen:** {added_by_info}
+📨 **Üye Ekleme İşlemi**
 
-📅 **Tarih:** `{format_date(datetime.now())}`"""
+◈ **Eklenen Üye:** {user_info}
+◈ **Ekleyen Yetkili:** {added_by_info}
+◈ **Ekleme Tarihi:** `{format_date(datetime.now())}`"""
         else:
-            log_text = f"""📥 **ÜYE KATILDI**
-{separator}
+            log_text = f"""#Üye_Katıldı
 
-👤 **Katılan:** {user_info}
+📥 **Üye Katılımı**
 
-📅 **Tarih:** `{format_date(datetime.now())}`"""
+◈ **Katılan Üye:** {user_info}
+◈ **Katılım Tarihi:** `{format_date(datetime.now())}`"""
         await send_log(log_text)
 
     elif event.user_left or event.user_kicked:
@@ -1140,19 +1129,19 @@ async def on_chat_action(event):
             user_info = "Bilinmiyor"
 
         if event.user_kicked:
-            log_text = f"""👢 **ÜYE ATILDI**
-{separator}
+            log_text = f"""#Üye_Atıldı
 
-👤 **Atılan:** {user_info}
+👢 **Üye Atılma İşlemi**
 
-📅 **Tarih:** `{format_date(datetime.now())}`"""
+◈ **Atılan Üye:** {user_info}
+◈ **Atılma Tarihi:** `{format_date(datetime.now())}`"""
         else:
-            log_text = f"""📤 **ÜYE AYRILDI**
-{separator}
+            log_text = f"""#Üye_Ayrıldı
 
-👤 **Ayrılan:** {user_info}
+📤 **Üye Ayrılması**
 
-📅 **Tarih:** `{format_date(datetime.now())}`"""
+◈ **Ayrılan Üye:** {user_info}
+◈ **Ayrılma Tarihi:** `{format_date(datetime.now())}`"""
         await send_log(log_text)
 
 
@@ -1189,13 +1178,13 @@ async def main():
     print("🚀 Bot çalışıyor! Durdurmak için Ctrl+C")
     print("=" * 50)
 
-    separator = "━" * 35
-    await send_log(f"""🤖 **LOG BOT BAŞLATILDI**
-{separator}
+    await send_log(f"""#Bot_Başlatıldı
 
-📥 **İzlenen:** {source.title}
-👤 **Hesap:** {me.first_name}
-📅 **Tarih:** `{format_date(datetime.now())}`
+🤖 **Log Bot Başlatıldı**
+
+◈ **İzlenen Grup:** {source.title}
+◈ **Bot Hesabı:** {me.first_name}
+◈ **Başlatma Tarihi:** `{format_date(datetime.now())}`
 
 ✅ Tüm eylemler loglanacak!""")
 
