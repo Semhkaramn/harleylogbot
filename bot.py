@@ -1129,7 +1129,15 @@ async def main():
     print("🤖 TELEGRAM LOG BOT")
     print("=" * 50)
 
-    await client.start()
+    # StringSession ile bağlan (interaktif input yok)
+    await client.connect()
+
+    # Oturum kontrolü
+    if not await client.is_user_authorized():
+        print("❌ StringSession geçersiz veya süresi dolmuş!")
+        print("Yeni bir StringSession oluşturun.")
+        return
+
     print("✅ Telegram'a bağlandı!")
 
     me = await client.get_me()
