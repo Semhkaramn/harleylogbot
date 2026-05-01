@@ -250,17 +250,35 @@ async def process_admin_log_event(event, users_dict):
         msg_sender_info = get_user_info(msg_sender) if msg_sender else "Bilinmiyor"
         msg_date = format_date(msg.date) if msg.date else "Bilinmiyor"
 
+        # İçerik belirleme
+        if text and media_info:
+            content_text = f"{text}\n┃ 📎 {media_info}"
+        elif text:
+            content_text = text
+        elif media_info:
+            content_text = f"📎 {media_info}"
+        else:
+            content_text = "⚠️ İçerik bulunamadı"
+
         log_text = f"""#Mesaj_Silindi
-
-🗑 **Mesaj Silme İşlemi**
-
-◈ **Silen Yetkili:** {user_info}
-◈ **Mesaj Sahibi:** {msg_sender_info}
-◈ **Mesaj İçeriği:** {text if text else "(Metin yok)"}
-{f"◈ **Medya:** {media_info}" if media_info else ""}
-◈ **Mesaj Tarihi:** `{msg_date}`
-◈ **Silinme Tarihi:** `{date}`
-◈ **Mesaj ID:** `{msg.id}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 🗑 **MESAJ SİLİNDİ**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👮 **SİLEN YETKİLİ:**
+┃ ╰ {user_info}
+┃
+┃ 👤 **MESAJ SAHİBİ:**
+┃ ╰ {msg_sender_info}
+┃
+┃ 📝 **SİLİNEN İÇERİK:**
+┃ ╰ {content_text}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Gönderim: `{msg_date}`
+┃ 🗑 Silinme: `{date}`
+┃ 🆔 Mesaj ID: `{msg.id}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         # Medya varsa indir ve gönder
         if msg.media:
@@ -277,22 +295,31 @@ async def process_admin_log_event(event, users_dict):
         old_msg = action.prev_message
         new_msg = action.new_message
 
-        old_text = old_msg.message if old_msg.message else "(Metin yok)"
-        new_text = new_msg.message if new_msg.message else "(Metin yok)"
+        old_text = old_msg.message if old_msg.message else "⚠️ İçerik yok"
+        new_text = new_msg.message if new_msg.message else "⚠️ İçerik yok"
 
         # Mesajı düzenleyen kişi bilgisi
         msg_sender = users_dict.get(new_msg.from_id.user_id) if new_msg.from_id and hasattr(new_msg.from_id, 'user_id') else None
         msg_sender_info = get_user_info(msg_sender) if msg_sender else user_info
 
         log_text = f"""#Mesaj_Düzenlendi
-
-✏ **Mesaj Düzenleme İşlemi**
-
-◈ **Düzenleyen:** {msg_sender_info}
-◈ **Eski İçerik:** {old_text}
-◈ **Yeni İçerik:** {new_text}
-◈ **Düzenlenme Tarihi:** `{date}`
-◈ **Mesaj ID:** `{new_msg.id}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ ✏️ **MESAJ DÜZENLENDİ**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **DÜZENLEYEN:**
+┃ ╰ {msg_sender_info}
+┃
+┃ 📝 **ESKİ İÇERİK:**
+┃ ╰ {old_text}
+┃
+┃ 📝 **YENİ İÇERİK:**
+┃ ╰ {new_text}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Düzenleme: `{date}`
+┃ 🆔 Mesaj ID: `{new_msg.id}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         await send_log(log_text)
 
@@ -303,47 +330,79 @@ async def process_admin_log_event(event, users_dict):
         is_pinned = msg and msg.id
         tag = "#Mesaj_Sabitlendi" if is_pinned else "#Sabit_Kaldırıldı"
         emoji = "📌" if is_pinned else "📍"
-        action_text = "Sabitleme" if is_pinned else "Sabit Kaldırma"
+        action_text = "SABİTLENDİ" if is_pinned else "SABİT KALDIRILDI"
 
         # Mesaj sahibi
         msg_sender = users_dict.get(msg.from_id.user_id) if msg and msg.from_id and hasattr(msg.from_id, 'user_id') else None
         msg_sender_info = get_user_info(msg_sender) if msg_sender else "Bilinmiyor"
         media_info = get_media_info(msg.media) if msg and msg.media else ""
 
+        # İçerik belirleme
+        if text and media_info:
+            content_text = f"{text}\n┃ ╰ 📎 {media_info}"
+        elif text:
+            content_text = text
+        elif media_info:
+            content_text = f"📎 {media_info}"
+        else:
+            content_text = "⚠️ İçerik bulunamadı"
+
         log_text = f"""{tag}
-
-{emoji} **Mesaj {action_text} İşlemi**
-
-◈ **İşlemi Yapan:** {user_info}
-◈ **Mesaj Sahibi:** {msg_sender_info}
-◈ **Mesaj İçeriği:** {text if text else "(Metin yok)"}
-{f"◈ **Medya:** {media_info}" if media_info else ""}
-◈ **İşlem Tarihi:** `{date}`
-{f"◈ **Mesaj ID:** `{msg.id}`" if msg else ""}"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ {emoji} **MESAJ {action_text}**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👮 **İŞLEMİ YAPAN:**
+┃ ╰ {user_info}
+┃
+┃ 👤 **MESAJ SAHİBİ:**
+┃ ╰ {msg_sender_info}
+┃
+┃ 📝 **MESAJ İÇERİĞİ:**
+┃ ╰ {content_text}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 İşlem: `{date}`
+{f"┃ 🆔 Mesaj ID: `{msg.id}`" if msg else ""}
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         await send_log(log_text)
 
     # ==================== ÜYE KATILDI ====================
     elif isinstance(action, ChannelAdminLogEventActionParticipantJoin):
         log_text = f"""#Gruba_Katıldı
-
-📥 **Gruba Katılma**
-
-◈ **Katılan Üye:** {user_info}
-◈ **Katılma Şekli:** Direkt Katılım
-◈ **Katılma Tarihi:** `{date}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📥 **YENİ ÜYE KATILDI**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **KATILAN ÜYE:**
+┃ ╰ {user_info}
+┃
+┃ 🔗 **KATILIM ŞEKLİ:**
+┃ ╰ Direkt Katılım (Link ile)
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Katılım: `{date}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         await send_log(log_text)
 
     # ==================== ÜYE AYRILDI ====================
     elif isinstance(action, ChannelAdminLogEventActionParticipantLeave):
         log_text = f"""#Gruptan_Ayrıldı
-
-📤 **Gruptan Ayrılma**
-
-◈ **Ayrılan Üye:** {user_info}
-◈ **Ayrılma Şekli:** Kendi İsteğiyle
-◈ **Ayrılma Tarihi:** `{date}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📤 **ÜYE GRUPTAN AYRILDI**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **AYRILAN ÜYE:**
+┃ ╰ {user_info}
+┃
+┃ 🚶 **AYRILMA ŞEKLİ:**
+┃ ╰ Kendi İsteğiyle Ayrıldı
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Ayrılma: `{date}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         await send_log(log_text)
 
@@ -353,12 +412,19 @@ async def process_admin_log_event(event, users_dict):
         invited_info = get_user_info(invited_user)
 
         log_text = f"""#Üye_Davet_Edildi
-
-📨 **Üye Davet İşlemi**
-
-◈ **Davet Eden:** {user_info}
-◈ **Davet Edilen:** {invited_info}
-◈ **Davet Tarihi:** `{date}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📨 **ÜYE DAVET EDİLDİ**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👮 **DAVET EDEN:**
+┃ ╰ {user_info}
+┃
+┃ 👤 **DAVET EDİLEN:**
+┃ ╰ {invited_info}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Davet: `{date}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         await send_log(log_text)
 
@@ -403,19 +469,19 @@ async def process_admin_log_event(event, users_dict):
         # Ban mı, unban mı, kısıtlama mı?
         if new_rights and new_rights.view_messages:
             emoji = "🚫"
-            action_text = "Yasaklama (Ban)"
+            action_text = "ÜYE YASAKLANDI (BAN)"
             tag = "#Üye_Yasaklandı"
         elif old_rights and old_rights.view_messages and (not new_rights or not new_rights.view_messages):
             emoji = "✅"
-            action_text = "Yasak Kaldırma (Unban)"
+            action_text = "YASAK KALDIRILDI (UNBAN)"
             tag = "#Yasak_Kaldırıldı"
         elif new_rights:
             emoji = "🔒"
-            action_text = "Kısıtlama"
+            action_text = "ÜYE KISITLANDI"
             tag = "#Üye_Kısıtlandı"
         else:
             emoji = "🔓"
-            action_text = "Kısıtlama Kaldırma"
+            action_text = "KISITLAMA KALDIRILDI"
             tag = "#Kısıtlama_Kaldırıldı"
 
         new_restrictions = format_banned_rights(new_rights) if new_rights else "Yok"
@@ -424,17 +490,28 @@ async def process_admin_log_event(event, users_dict):
         # Süre
         until_text = ""
         if new_rights and new_rights.until_date:
-            until_text = f"\n◈ **Bitiş Tarihi:** `{format_date(new_rights.until_date)}`"
+            until_text = f"\n┃ ⏰ **BİTİŞ TARİHİ:**\n┃ ╰ `{format_date(new_rights.until_date)}`\n┃"
 
         log_text = f"""{tag}
-
-{emoji} **{action_text} İşlemi**
-
-◈ **İşlemi Yapan Yetkili:** {user_info}
-◈ **Hedef Üye:** {target_info}
-◈ **Önceki Kısıtlamalar:** {old_restrictions}
-◈ **Yeni Kısıtlamalar:** {new_restrictions}{until_text}
-◈ **İşlem Tarihi:** `{date}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ {emoji} **{action_text}**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👮 **İŞLEMİ YAPAN YETKİLİ:**
+┃ ╰ {user_info}
+┃
+┃ 👤 **HEDEF ÜYE:**
+┃ ╰ {target_info}
+┃
+┃ 📋 **ÖNCEKİ KISITLAMALAR:**
+┃ ╰ {old_restrictions}
+┃
+┃ 📋 **YENİ KISITLAMALAR:**
+┃ ╰ {new_restrictions}
+┃{until_text}
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 İşlem: `{date}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         await send_log(log_text)
 
@@ -449,15 +526,15 @@ async def process_admin_log_event(event, users_dict):
 
         if new_rights and not old_rights:
             emoji = "👑"
-            action_text = "Admin Yapma"
+            action_text = "YENİ ADMİN ATANDI"
             tag = "#Admin_Yapıldı"
         elif old_rights and not new_rights:
             emoji = "👤"
-            action_text = "Adminlik Alma"
+            action_text = "ADMİNLİK ALINDI"
             tag = "#Adminlik_Alındı"
         else:
             emoji = "⚙️"
-            action_text = "Admin Yetki Değişikliği"
+            action_text = "ADMİN YETKİLERİ DEĞİŞTİ"
             tag = "#Admin_Yetkileri_Değişti"
 
         new_perms = format_admin_rights(new_rights) if new_rights else "Yok"
@@ -465,17 +542,28 @@ async def process_admin_log_event(event, users_dict):
 
         rank_text = ""
         if hasattr(action.new_participant, 'rank') and action.new_participant.rank:
-            rank_text = f"\n◈ **Ünvan:** `{action.new_participant.rank}`"
+            rank_text = f"\n┃ 🏷 **ÜNVAN:**\n┃ ╰ `{action.new_participant.rank}`\n┃"
 
         log_text = f"""{tag}
-
-{emoji} **{action_text} İşlemi**
-
-◈ **İşlemi Yapan:** {user_info}
-◈ **Hedef Üye:** {target_info}
-◈ **Önceki Yetkiler:** {old_perms}
-◈ **Yeni Yetkiler:** {new_perms}{rank_text}
-◈ **İşlem Tarihi:** `{date}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ {emoji} **{action_text}**
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👮 **İŞLEMİ YAPAN:**
+┃ ╰ {user_info}
+┃
+┃ 👤 **HEDEF ÜYE:**
+┃ ╰ {target_info}
+┃{rank_text}
+┃ 📋 **ÖNCEKİ YETKİLER:**
+┃ ╰ {old_perms}
+┃
+┃ 📋 **YENİ YETKİLER:**
+┃ ╰ {new_perms}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 İşlem: `{date}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         await send_log(log_text)
 
@@ -1041,14 +1129,24 @@ async def on_message_edited(event):
             user_info = f"`{msg.sender_id}`"
 
         log_text = f"""#Mesaj_Düzenlendi_Gerçek_Zamanlı
-
-✏️ **Mesaj Düzenleme (Gerçek Zamanlı)**
-
-◈ **Düzenleyen:** {user_info}
-◈ **Eski İçerik:** {old_text}
-◈ **Yeni İçerik:** {msg.message if msg.message else "(Metin yok)"}
-◈ **Düzenleme Tarihi:** `{format_date(msg.edit_date)}`
-◈ **Mesaj ID:** `{msg.id}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ ✏️ **MESAJ DÜZENLENDİ** ⚡
+┃ ╰ (Gerçek Zamanlı Tespit)
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **DÜZENLEYEN:**
+┃ ╰ {user_info}
+┃
+┃ 📝 **ESKİ İÇERİK:**
+┃ ╰ {old_text}
+┃
+┃ 📝 **YENİ İÇERİK:**
+┃ ╰ {msg.message if msg.message else "⚠️ İçerik yok"}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Düzenleme: `{format_date(msg.edit_date)}`
+┃ 🆔 Mesaj ID: `{msg.id}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
         await send_log(log_text)
 
 
@@ -1067,15 +1165,32 @@ async def on_message_deleted(event):
             text = cached.get('text', '')
             media_info = get_media_info(cached.get('media')) if cached.get('media') else ""
 
+            # İçerik belirleme
+            if text and media_info:
+                content_text = f"{text}\n┃ ╰ 📎 {media_info}"
+            elif text:
+                content_text = text
+            elif media_info:
+                content_text = f"📎 {media_info}"
+            else:
+                content_text = "⚠️ İçerik bulunamadı"
+
             log_text = f"""#Mesaj_Silindi_Gerçek_Zamanlı
-
-🗑️ **Mesaj Silme (Gerçek Zamanlı)**
-
-◈ **Mesaj Sahibi:** {user_info}
-◈ **Silinen İçerik:** {text if text else "(Metin yok)"}
-{f"◈ **Medya:** {media_info}" if media_info else ""}
-◈ **Gönderilme Tarihi:** `{format_date(cached.get('date'))}`
-◈ **Mesaj ID:** `{msg_id}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 🗑️ **MESAJ SİLİNDİ** ⚡
+┃ ╰ (Gerçek Zamanlı Tespit)
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **MESAJ SAHİBİ:**
+┃ ╰ {user_info}
+┃
+┃ 📝 **SİLİNEN İÇERİK:**
+┃ ╰ {content_text}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Gönderim: `{format_date(cached.get('date'))}`
+┃ 🆔 Mesaj ID: `{msg_id}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
             if cached.get('media'):
                 try:
@@ -1106,19 +1221,31 @@ async def on_chat_action(event):
             except:
                 added_by_info = "Bilinmiyor"
             log_text = f"""#Üye_Eklendi
-
-📨 **Üye Ekleme İşlemi**
-
-◈ **Eklenen Üye:** {user_info}
-◈ **Ekleyen Yetkili:** {added_by_info}
-◈ **Ekleme Tarihi:** `{format_date(datetime.now())}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📨 **ÜYE EKLENDİ** ⚡
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **EKLENEN ÜYE:**
+┃ ╰ {user_info}
+┃
+┃ 👮 **EKLEYEN YETKİLİ:**
+┃ ╰ {added_by_info}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Ekleme: `{format_date(datetime.now())}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
         else:
             log_text = f"""#Üye_Katıldı
-
-📥 **Üye Katılımı**
-
-◈ **Katılan Üye:** {user_info}
-◈ **Katılım Tarihi:** `{format_date(datetime.now())}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📥 **YENİ ÜYE KATILDI** ⚡
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **KATILAN ÜYE:**
+┃ ╰ {user_info}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Katılım: `{format_date(datetime.now())}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
         await send_log(log_text)
 
     elif event.user_left or event.user_kicked:
@@ -1130,18 +1257,28 @@ async def on_chat_action(event):
 
         if event.user_kicked:
             log_text = f"""#Üye_Atıldı
-
-👢 **Üye Atılma İşlemi**
-
-◈ **Atılan Üye:** {user_info}
-◈ **Atılma Tarihi:** `{format_date(datetime.now())}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 👢 **ÜYE ATILDI** ⚡
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **ATILAN ÜYE:**
+┃ ╰ {user_info}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Atılma: `{format_date(datetime.now())}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
         else:
             log_text = f"""#Üye_Ayrıldı
-
-📤 **Üye Ayrılması**
-
-◈ **Ayrılan Üye:** {user_info}
-◈ **Ayrılma Tarihi:** `{format_date(datetime.now())}`"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📤 **ÜYE AYRILDI** ⚡
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃
+┃ 👤 **AYRILAN ÜYE:**
+┃ ╰ {user_info}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ 📅 Ayrılma: `{format_date(datetime.now())}`
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
         await send_log(log_text)
 
 
